@@ -1,0 +1,23 @@
+{
+  "name": "utf8-loader",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "peerDependencies": {
+    "webpack": "^1.12.9"
+  },
+  "dependencies": {
+    "escodegen": "^1.7.1",
+    "esprima": "^2.7.1",
+    "loader-utils": "^0.2.12"
+  },
+  "devDependencies": {
+    "file-loader": "^0.8.5",
+    "url-loader": "^0.5.7"
+  }
+}
