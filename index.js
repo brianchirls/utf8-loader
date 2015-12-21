@@ -90,6 +90,8 @@ module.exports = function (source) {
 	const options = loaderUtils.parseQuery(this.query) || {};
 	const self = this;
 	// const imageLoader = options.imageLoader === undefined ? 'url-loader?limit=8192' : options.imageLoader;
+	const imageSizes = {};
+	const modelSizes = {};
 
 	if (this.cacheable) {
 		this.cacheable();
@@ -119,6 +121,11 @@ module.exports = function (source) {
 								raw: '"' + requireValue + '"' //todo: escape this or something?
 							}
 						];
+
+						// get file size
+						const imagePath = path.resolve(self.context, node.value);
+						const stats = fs.statSync(imagePath);
+						imageSizes[loaderUtils.stringifyRequest(self, imagePath)] = stats.size;
 					}
 				}
 			},
@@ -140,10 +147,22 @@ module.exports = function (source) {
 						self.emitFile(key.value, utf8Content);
 						//key.value = url;
 						//key.raw = '"./' + url + '"' //todo: escape this or something?
+
+						// get file size
+						modelSizes[loaderUtils.stringifyRequest(self, key.value)] = utf8Content.byteLength;
 					});
 				}
 			}
 		]);
+
+		// extend JSON with file sizes
+		const fileSizeSyntax = esprima.parse('(' + JSON.stringify({
+			imageSizes,
+			modelSizes
+		}) + ')');
+		const modelInfoProperties = syntax.body[0].expression.properties;
+		const fileSizeProperties = fileSizeSyntax.body[0].expression.properties;
+		Array.prototype.push.apply(modelInfoProperties, fileSizeProperties);
 
 		source = escodegen.generate(syntax);
 	} catch (e) {
