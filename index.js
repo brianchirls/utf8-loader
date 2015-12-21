@@ -12,7 +12,11 @@ const escodegen = require('escodegen');
 
 const dataUriRegex = /^data:image\/(?:png|jpe?g|gif);/
 const urlRegex = require('./lib/url-regex');
-
+const textureFields = [
+	'map_Kd',
+	'map_bump',
+	'bump'
+];
 // const codeGenOpts = {
 // 	format: {
 // 		compact: true
@@ -90,20 +94,37 @@ module.exports = function (source) {
 	const options = loaderUtils.parseQuery(this.query) || {};
 	const self = this;
 	// const imageLoader = options.imageLoader === undefined ? 'url-loader?limit=8192' : options.imageLoader;
-	const imageSizes = {};
-	const modelSizes = {};
+	const geometrySizes = {};
 
 	if (this.cacheable) {
 		this.cacheable();
 	}
 
 	try {
+		// get image sizes up front and store them in each material
+		const modelInfo = JSON.parse(source);
+		if (modelInfo.materials) {
+			Object.keys(modelInfo.materials).forEach(function (mat) {
+				const material = modelInfo.materials[mat];
+				for (let field of textureFields) {
+					const tex = material[field]
+					if (tex) {
+						// get file size
+						const imagePath = path.resolve(self.context, tex);
+						const stats = fs.statSync(imagePath);
+						material[field + '_size'] = stats.size;
+					}
+				}
+			});
+			source = JSON.stringify(modelInfo);
+		}
+
 		const syntax = esprima.parse('(' + source + ')');
 
 		traverseAST(syntax, [
 			{
 				regex: /^materials\|[^\|]+\|(map_Kd|(map_)?bump)$/,
-				callback: function (node) {
+				callback: function (node, path) {
 					const url = node.value;
 					if (isRelative(url)) {
 						node.type = 'CallExpression';
@@ -121,11 +142,6 @@ module.exports = function (source) {
 								raw: '"' + requireValue + '"' //todo: escape this or something?
 							}
 						];
-
-						// get file size
-						const imagePath = path.resolve(self.context, node.value);
-						const stats = fs.statSync(imagePath);
-						imageSizes[loaderUtils.stringifyRequest(self, imagePath)] = stats.size;
 					}
 				}
 			},
@@ -149,7 +165,7 @@ module.exports = function (source) {
 						//key.raw = '"./' + url + '"' //todo: escape this or something?
 
 						// get file size
-						modelSizes[loaderUtils.stringifyRequest(self, key.value)] = utf8Content.byteLength;
+						geometrySizes[loaderUtils.stringifyRequest(self, key.value)] = utf8Content.byteLength;
 					});
 				}
 			}
@@ -157,8 +173,7 @@ module.exports = function (source) {
 
 		// extend JSON with file sizes
 		const fileSizeSyntax = esprima.parse('(' + JSON.stringify({
-			imageSizes,
-			modelSizes
+			geometrySizes
 		}) + ')');
 		const modelInfoProperties = syntax.body[0].expression.properties;
 		const fileSizeProperties = fileSizeSyntax.body[0].expression.properties;
